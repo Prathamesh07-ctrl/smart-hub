@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartHub 3D &mdash; Scroll Experience</title>
+  <meta name="description" content="An immersive, scroll-driven 3D architectural animation of SmartHub, rendered frame-by-frame as you scroll." />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,600;1,400&display=swap" rel="stylesheet" />
+
+  <!-- GSAP 3 + ScrollTrigger (CDN) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+
+  <!-- React, ReactDOM, Babel, Framer Motion -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+  <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
+
+  <style>
+    /* ---- Reset & Variables -------------------------------------------- */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #060608;
+      --fg:           #f5f5f7;
+      --muted:        #a1a1a6;
+      --accent:       #2997ff;
+      --brass:        #C9A96E;
+      --brass-glow:   rgba(201, 169, 110, 0.35);
+      --glow:         rgba(41,151,255,.25);
+      --font:         'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --serif:        'Playfair Display', Georgia, serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      cursor: default; /* Normal standard cursor */
+    }
+
+    /* ===== NOISE & WOOD GRAIN OVERLAYS ===== */
+    body::after {
+      content: '';
+      position: fixed; inset: 0; pointer-events: none; z-index: 88888;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+      opacity: .045;
+    }
+
+    /* ===== FULLSCREEN FIXED 3D CANVAS BACKGROUND ===== */
+    #bg-canvas-container {
+      position: fixed; inset: 0; z-index: -1;
+      pointer-events: none;
+      overflow: hidden;
+      background: #060608;
+    }
+    #seq-canvas {
+      display: block;
+      width: 100vw; height: 100vh;
+      object-fit: cover;
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+    }
+    .canvas-vignette {
+      position: absolute; inset: 0;
+      background: radial-gradient(circle at center, rgba(6,6,8,0.15) 0%, rgba(6,6,8,0.7) 100%);
+      pointer-events: none;
+    }
+
+    /* ===== CONTENT WRAPPER ===== */
+    #content-wrapper {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+    }
+
+    /* ===== NAV BAR ===== */
+    #main-nav {
+      position: fixed; top: 0; left: 0; width: 100%; z-index: 9000;
+      padding: 24px 40px;
+      display: flex; align-items: center; justify-content: space-between;
+      transition: padding 0.4s ease, background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+      border-bottom: 1px solid transparent;
+    }
+    #main-nav.scrolled {
+      padding: 14px 40px;
+      background: rgba(6, 6, 8, 0.85);
+      backdrop-filter: blur(20px) saturate(1.4);
+      -webkit-backdrop-filter: blur(20px) saturate(1.4);
+      border-bottom-color: rgba(255, 255, 255, 0.08);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+
+    .nav-brand {
+      font-size: 18px; font-weight: 700; letter-spacing: -0.5px;
+      color: #fff; text-decoration: none; display: flex; align-items: center; gap: 8px;
+    }
+    .nav-brand span {
+      width: 8px; height: 8px; background: var(--brass); border-radius: 50%;
+      box-shadow: 0 0 10px var(--brass);
+    }
+    .nav-links {
+      display: flex; align-items: center; gap: 32px; list-style: none;
+    }
+    .nav-link {
+      font-size: 13px; font-weight: 500; letter-spacing: 1px;
+      text-transform: uppercase; color: var(--muted);
+      text-decoration: none; transition: color 0.2s;
+    }
+    .nav-link:hover { color: #fff; }
+    .nav-cta {
+      padding: 8px 20px; font-size: 13px; font-weight: 600;
+      color: var(--bg); background: var(--brass);
+      border-radius: 99px; text-decoration: none;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .nav-cta:hover { transform: translateY(-1px); box-shadow: 0 0 20px var(--brass-glow); }
+
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+      #main-nav { padding: 16px 20px; }
+    }
+
+    /* ===== LOADER (PAGE-LOAD COUNTER STYLING) ===== */
+    #loader {
+      position: fixed; inset: 0; z-index: 99999;
+      background: #040406;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 20px;
+      transition: opacity .7s ease, visibility .7s ease;
+    }
+    #loader.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+    .ld-number-wrap {
+      display: flex; align-items: baseline; gap: 4px;
+    }
+    .ld-pct-num {
+      font-family: var(--serif);
+      font-size: clamp(72px, 14vw, 140px);
+      font-weight: 600;
+      line-height: 1;
+      background: linear-gradient(135deg, #ffffff 40%, var(--brass));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .ld-pct-symbol {
+      font-size: clamp(24px, 4vw, 42px);
+      color: var(--brass);
+      font-weight: 300;
+    }
+    .ld-tagline {
+      font-size: 11px; font-weight: 600; letter-spacing: 4px; text-transform: uppercase;
+      color: var(--muted);
+    }
+    .ld-track {
+      width: clamp(240px, 45vw, 360px); height: 2px;
+      background: rgba(255,255,255,.08); border-radius: 99px; overflow: hidden;
+      margin-top: 10px;
+    }
+    .ld-bar {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, var(--brass), #f5d796);
+      border-radius: 99px;
+      transition: width .12s linear;
+      box-shadow: 0 0 14px var(--brass-glow);
+    }
+
+    /* ===== HERO ===== */
+    #hero {
+      position: relative; min-height: 100svh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center;
+      padding: 120px 24px 80px;
+      overflow: hidden;
+    }
+
+    #hero-mouse-glow {
+      position: absolute;
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(201, 169, 110, 0.12) 0%, rgba(41, 151, 255, 0.04) 45%, transparent 70%);
+      border-radius: 50%;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .h-eyebrow {
+      font-size: clamp(10px,1.4vw,13px); font-weight: 600;
+      letter-spacing: 4px; text-transform: uppercase;
+      color: var(--brass); margin-bottom: clamp(16px,2vw,24px);
+      opacity: 0; transform: translateY(20px);
+    }
+
+    .h-headline {
+      font-size: clamp(52px,10vw,112px); font-weight: 700;
+      line-height: 1.05; letter-spacing: -2.5px;
+      color: #fff;
+      margin-bottom: clamp(16px,2vw,24px);
+      display: flex; flex-wrap: wrap; justify-content: center; gap: 0 16px;
+      max-width: 1000px;
+    }
+    .h-word {
+      display: inline-block;
+      opacity: 0; transform: translateY(32px);
+      background: linear-gradient(170deg,#ffffff 30%,#a1a1a6 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+
+    .h-tagline {
+      font-size: clamp(10px,1.6vw,14px); font-weight: 500;
+      letter-spacing: clamp(4px,1vw,8px);
+      text-transform: uppercase;
+      color: rgba(245,245,247,.75);
+      margin-bottom: clamp(16px,2vw,28px);
+      opacity: 0; transform: translateY(20px);
+    }
+    .h-sub {
+      font-size: clamp(15px,2vw,20px); font-weight: 300;
+      color: var(--muted); max-width: 520px; line-height: 1.65;
+      opacity: 0; transform: translateY(20px);
+    }
+
+    #scroll-hint {
+      position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%);
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      opacity: 0; pointer-events: none;
+    }
+    .sh-text {
+      font-size: 11px; font-weight: 600; letter-spacing: 3px;
+      text-transform: uppercase; color: var(--muted);
+    }
+    .sh-arrow {
+      width: 18px; height: 18px;
+      border-right: 1.5px solid var(--brass);
+      border-bottom: 1.5px solid var(--brass);
+      transform: rotate(45deg);
+      animation: bounce 1.8s ease-in-out infinite;
+    }
+    @keyframes bounce {
+      0%,100% { transform: rotate(45deg) translateY(0); }
+      50%      { transform: rotate(45deg) translateY(6px); }
+    }
+
+    /* Frame Counter & Progress Bar Overlay */
+    .canvas-progress-wrap {
+      position: fixed; right: 32px; top: 50%; transform: translateY(-50%);
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      z-index: 8000; pointer-events: none;
+    }
+    .canvas-progress-bar {
+      width: 2px; height: 160px;
+      background: rgba(255,255,255,0.12);
+      border-radius: 99px; overflow: hidden; position: relative;
+    }
+    .canvas-progress-fill {
+      width: 100%; height: 0%;
+      background: var(--brass);
+      box-shadow: 0 0 12px var(--brass-glow);
+    }
+    .canvas-frame-tag {
+      writing-mode: vertical-rl;
+      font-size: 10px; font-weight: 600; letter-spacing: 2px;
+      color: var(--brass); text-transform: uppercase;
+    }
+
+    /* ===== SLIDING DOOR WORK SHOWCASE SECTION ===== */
+    #sliding-door-section {
+      position: relative;
+      min-height: 120vh;
+      padding: 80px 24px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 30;
+    }
+    .door-section-header {
+      text-align: center; max-width: 720px; margin-bottom: 40px;
+    }
+    .tv-eyebrow {
+      font-size: clamp(10px, 1.3vw, 13px);
+      font-weight: 600;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: var(--brass);
+      margin-bottom: 12px;
+    }
+    .tv-title {
+      font-size: clamp(32px, 5vw, 56px);
+      font-weight: 700;
+      letter-spacing: -1.5px;
+      line-height: 1.08;
+      background: linear-gradient(160deg, #ffffff 30%, #a1a1a6 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 14px;
+    }
+    .tv-subtitle {
+      font-size: clamp(14px, 1.8vw, 18px);
+      font-weight: 300;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .door-frame-wrapper {
+      position: relative;
+      width: 100%; max-width: 1320px;
+      min-height: 840px;
+      border-radius: 28px;
+      border: 1px solid rgba(201, 169, 110, 0.4);
+      background: rgba(10, 10, 14, 0.75);
+      backdrop-filter: blur(24px) saturate(1.4);
+      -webkit-backdrop-filter: blur(24px) saturate(1.4);
+      overflow: hidden;
+      box-shadow: 0 30px 90px rgba(0,0,0,0.85), 0 0 40px var(--brass-glow);
+    }
+    .door-panel {
+      position: absolute; top: 0; bottom: 0; width: 50.1%;
+      background: linear-gradient(135deg, #1c1a17 0%, #100f0d 100%);
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='w'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.02 0.15' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23w)' opacity='0.14'/%3E%3C/svg%3E");
+      z-index: 20;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: inset 0 0 60px rgba(0,0,0,0.9);
+      will-change: transform;
+    }
+    .door-left {
+      left: 0; border-right: 2.5px solid var(--brass);
+    }
+    .door-right {
+      right: 0; border-left: 2.5px solid var(--brass);
+    }
+    .door-handle-left, .door-handle-right {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      width: 7px; height: 110px; background: var(--brass);
+      border-radius: 99px; box-shadow: 0 0 16px var(--brass-glow);
+    }
+    .door-handle-left { right: 24px; }
+    .door-handle-right { left: 24px; }
+
+    .door-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 4px; text-transform: uppercase;
+      color: var(--brass); background: rgba(0,0,0,0.6); padding: 8px 18px; border-radius: 99px;
+      border: 1px solid rgba(201, 169, 110, 0.3);
+    }
+
+    .door-gallery-content {
+      padding: 36px 32px;
+      width: 100%; height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 36px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+    .portfolio-section-block {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .portfolio-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(201, 169, 110, 0.25);
+      padding-bottom: 10px;
+    }
+    .portfolio-section-title {
+      font-size: 19px;
+      font-weight: 600;
+      color: var(--fg);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .portfolio-section-badge {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 99px;
+      background: rgba(201, 169, 110, 0.15);
+      color: var(--brass);
+      border: 1px solid rgba(201, 169, 110, 0.3);
+    }
+    .tv-grid {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      gap: 20px;
+      width: 100%;
+      overflow-x: auto;
+      padding-bottom: 12px;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+    }
+    .tv-card {
+      position: relative;
+      width: 285px;
+      flex-shrink: 0;
+      scroll-snap-align: start;
+      background: rgba(18, 18, 22, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.4s, box-shadow 0.4s;
+    }
+    .tv-card:hover {
+      transform: translateY(-6px);
+      border-color: rgba(201, 169, 110, 0.6);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7), 0 0 25px var(--brass-glow);
+    }
+    .tv-card-img-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 50%, rgba(201, 169, 110, 0.12) 0%, rgba(18, 18, 22, 0.95) 75%);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .tv-card-img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .tv-card:hover .tv-card-img {
+      transform: scale(1.08);
+    }
+    .tv-card-img-wrap::before {
+      content: '';
+      position: absolute; inset: 12px;
+      border: 1px dashed rgba(201, 169, 110, 0.3);
+      border-radius: 10px;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .tv-card-badge {
+      position: absolute; top: 16px; left: 16px;
+      background: rgba(6, 6, 8, 0.85);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(201, 169, 110, 0.3);
+      color: var(--brass);
+      font-size: 10px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase;
+      padding: 4px 10px; border-radius: 99px;
+      z-index: 2;
+    }
+    .tv-card-badge.pdf-badge {
+      background: rgba(201, 169, 110, 0.25);
+      border-color: var(--brass);
+      color: #fff;
+      box-shadow: 0 0 12px var(--brass-glow);
+    }
+    .tv-card-frame-icon {
+      font-size: 28px;
+      color: var(--brass);
+      opacity: 0.7;
+      transition: transform 0.4s ease, opacity 0.4s ease;
+    }
+    .tv-card:hover .tv-card-frame-icon {
+      transform: scale(1.15);
+      opacity: 1;
+    }
+    .tv-card-info { padding: 18px 20px 22px; }
+    .tv-card-name { font-size: 18px; font-weight: 600; color: #f5f5f7; margin-bottom: 6px; letter-spacing: -0.5px; }
+    .tv-card-desc { font-size: 13px; color: var(--muted); line-height: 1.5; font-weight: 300; }
+
+    .tv-tag {
+      display: inline-block;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--brass);
+      background: rgba(201, 169, 110, 0.1);
+      border: 1px solid rgba(201, 169, 110, 0.3);
+      border-radius: 99px;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+
+    /* Modal / Lightbox */
+    .tv-modal {
+      position: fixed; inset: 0; z-index: 99999;
+      background: rgba(4, 4, 6, 0.92);
+      backdrop-filter: blur(24px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    .tv-modal.active { opacity: 1; pointer-events: auto; }
+    .tv-modal-content {
+      position: relative; background: #141418;
+      border: 1px solid rgba(201, 169, 110, 0.35);
+      border-radius: 24px; max-width: 840px; width: 100%;
+      max-height: 92vh; overflow-y: auto; display: block;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.85), 0 0 35px var(--brass-glow);
+    }
+    .tv-modal-body { padding: 36px; display: flex; flex-direction: column; gap: 20px; }
+    .tv-modal-close {
+      position: absolute; top: 20px; right: 20px;
+      width: 36px; height: 36px; background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.15); border-radius: 50%; color: #fff; font-size: 20px;
+      display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s; z-index: 10;
+    }
+    .tv-modal-close:hover { background: rgba(255,255,255,0.25); }
+
+    .modal-media-preview {
+      width: 100%; min-height: 340px; max-height: 480px;
+      border-radius: 16px; overflow: hidden;
+      background: #08080a;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      position: relative;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .modal-media-preview img {
+      max-width: 100%; max-height: 480px; object-fit: contain;
+    }
+    .modal-actions {
+      display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-top: 10px;
+    }
+    .btn-pdf-open {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 14px 28px; font-size: 14px; font-weight: 600;
+      color: #fff; background: linear-gradient(135deg, var(--brass) 0%, #a8813f 100%);
+      border-radius: 99px; text-decoration: none;
+      box-shadow: 0 0 20px var(--brass-glow);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn-pdf-open:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 30px rgba(201, 169, 110, 0.6);
+    }
+
+    /* ---- Footer CTA --------------------------------------------------- */
+    #footer-cta {
+      min-height: 80vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center; gap: 32px; padding: 60px 24px;
+      background: rgba(6, 6, 8, 0.85);
+      backdrop-filter: blur(20px);
+    }
+    .f-headline {
+      font-size: clamp(36px,7vw,76px); font-weight: 700;
+      letter-spacing: -2px; line-height: 1.08;
+      background: linear-gradient(150deg,#fff 0%,#a1a1a6);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; max-width: 800px;
+    }
+    .f-sub {
+      font-size: clamp(15px,2vw,20px); color: var(--muted);
+      max-width: 480px; line-height: 1.6;
+    }
+    .cta-btn {
+      display: inline-block; padding: 15px 40px;
+      font-size: 16px; font-weight: 500; font-family: var(--font);
+      color: #fff; background: var(--accent);
+      border: none; border-radius: 980px;
+      cursor: pointer; letter-spacing: -.2px; text-decoration: none;
+      transition: background .2s, box-shadow .2s, transform .15s;
+      pointer-events: all;
+    }
+    .cta-btn:hover {
+      background: #1a86ef;
+      box-shadow: 0 0 40px var(--glow);
+      transform: translateY(-2px);
+    }
+    .cta-btn:active { transform: translateY(0); }
+  </style>
+</head>
+<body>
+
+<!-- ===== NAVIGATION BAR ===== -->
+<nav id="main-nav">
+  <a href="#" class="nav-brand"><span></span>SmartHub</a>
+  <ul class="nav-links">
+    <li><a href="#hero" class="nav-link">Overview</a></li>
+    <li><a href="#sliding-door-section" class="nav-link">Portfolio</a></li>
+    <li><a href="#footer-cta" class="nav-link">Pre-Order</a></li>
+  </ul>
+  <a href="#footer-cta" class="nav-cta">Pre-Order</a>
+</nav>
+
+<!-- ===== FULLSCREEN FIXED 3D CANVAS BACKGROUND ===== -->
+<div id="bg-canvas-container">
+  <canvas id="seq-canvas" role="img" aria-label="SmartHub rotating 3D view"></canvas>
+  <div class="canvas-vignette"></div>
+</div>
+
+<!-- Frame Progress Indicator HUD Overlay -->
+<div class="canvas-progress-wrap">
+  <span class="canvas-frame-tag" id="frame-counter">FRAME 001 / 300</span>
+  <div class="canvas-progress-bar">
+    <div class="canvas-progress-fill" id="canvas-fill"></div>
+  </div>
+</div>
+
+<!-- ================================================================ LOADER -->
+<div id="loader" role="status" aria-live="polite">
+  <div class="ld-logo">SmartHub</div>
+  <div class="ld-number-wrap">
+    <span class="ld-pct-num" id="ld-num">000</span>
+    <span class="ld-pct-symbol">%</span>
+  </div>
+  <div class="ld-tagline">Preloading 3D Spatial Walkthrough</div>
+  <div class="ld-track"><div class="ld-bar" id="ld-bar"></div></div>
+</div>
+
+<!-- ========================================================= MAIN CONTENT WRAPPER -->
+<main id="content-wrapper">
+
+  <!-- ================================================================== HERO -->
+  <section id="hero">
+    <div id="hero-mouse-glow"></div>
+    <p  class="h-eyebrow"  id="h-eyebrow">Introducing</p>
+
+    <!-- Split-text headline reveal -->
+    <h1 class="h-headline" id="h-headline">
+      <span class="h-word">SMART</span>
+      <span class="h-word">HUB</span>
+    </h1>
+
+    <p  class="h-tagline"  id="h-tagline">Spade Motion Art &amp; Interior Training Hub</p>
+    <p  class="h-sub"      id="h-sub">The next era of connected living,<br>engineered down to every detail.</p>
+
+    <div id="scroll-hint">
+      <span class="sh-text">Scroll to explore</span>
+      <div  class="sh-arrow"></div>
+    </div>
+  </section>
+
+  <!-- ============================================= SLIDING DOOR WORK SHOWCASE -->
+  <section id="sliding-door-section">
+    <div class="door-section-header">
+      <p class="tv-eyebrow">Architectural Portfolio</p>
+      <h2 class="tv-title">Bespoke Console &amp; Work Showcase</h2>
+      <p class="tv-subtitle">Scroll through the entrance to slide open the doors &amp; reveal custom architectural media suites.</p>
+    </div>
+
+    <!-- Sliding Door Frame Wrapper -->
+    <div class="door-frame-wrapper">
+      
+      <!-- Door Panels that slide left and right on scroll -->
+      <div class="door-panel door-left" id="door-panel-left">
+        <div class="door-handle-left"></div>
+        <span class="door-label">SLIDE TO OPEN ◂</span>
+      </div>
+      <div class="door-panel door-right" id="door-panel-right">
+        <div class="door-handle-right"></div>
+        <span class="door-label">▸ SLIDE TO OPEN</span>
+      </div>
+
+      <!-- Revealed Work Gallery Inside Door Opening -->
+      <div class="door-gallery-content">
+
+        <!-- ── Row 1: Mr. Yogesh Sutar ── -->
+        <div class="portfolio-section-block">
+          <div class="portfolio-section-header">
+            <h3 class="portfolio-section-title">
+              Mr. Yogesh Sutar
+              <span class="portfolio-section-badge">2BHK 3D Views · 18 Photos</span>
+            </h3>
+          </div>
+          <div class="tv-grid">
+            <!-- ── Mr. Yogesh Sutar – 2BHK 3D Views ── -->
+          <div class="tv-card" onclick="openTvModal('Mr. Yogesh Sutar — P3', 'Living room spatial 3D render.', ['Yogesh Sutar', '2BHK', 'Living Room'], 'assets/gari-projects/gari_render_pdf1_p3.jpg', '_MR YOGESH SUTAR 3D VIEWS OF 2BHK (2).pdf', 'Yogesh Sutar — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P3</span>
+              <img src="assets/gari-projects/gari_render_pdf1_p3.jpg" alt="P3" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">2BHK 3D View — Page 3</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Yogesh Sutar — P4', '2BHK architectural render page 4.', ['Yogesh Sutar', '2BHK'], 'assets/gari-projects/gari_render_pdf1_p4.jpg', '_MR YOGESH SUTAR 3D VIEWS OF 2BHK (2).pdf', 'Yogesh Sutar — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P4</span>
+              <img src="assets/gari-projects/gari_render_pdf1_p4.jpg" alt="P4" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">2BHK 3D View — Page 4</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Yogesh Sutar — P5', '2BHK architectural render page 5.', ['Yogesh Sutar', '2BHK'], 'assets/gari-projects/gari_render_pdf1_p5.jpg', '_MR YOGESH SUTAR 3D VIEWS OF 2BHK (2).pdf', 'Yogesh Sutar — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P5</span>
+              <img src="assets/gari-projects/gari_render_pdf1_p5.jpg" alt="P5" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">2BHK 3D View — Page 5</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Yogesh Sutar — P6', '2BHK architectural render page 6.', ['Yogesh Sutar', '2BHK'], 'assets/gari-projects/gari_render_pdf1_p6.jpg', '_MR YOGESH SUTAR 3D VIEWS OF 2BHK (2).pdf', 'Yogesh Sutar — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P6</span>
+              <img src="assets/gari-projects/gari_render_pdf1_p6.jpg" alt="P6" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">2BHK 3D View — Page 6</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Yogesh Sutar — P8', '2BHK architectural render page 8.', ['Yogesh Sutar', '2BHK'], 'assets/gari-projects/gari_render_pdf1_p8.jpg', '_MR YOGESH SUTAR 3D VIEWS OF 2BHK (2).pdf', 'Yogesh Sutar — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P8</span>
+              <img src="assets/gari-projects/gari_render_pdf1_p8.jpg" alt="P8" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">2BHK 3D View — Page 8</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Yogesh Sutar — P9', '2BHK architectural render page 9.', ['Yogesh Sutar', '2BHK'], 'assets/gari-projects/gari_render_pdf1_p9.jpg', '_MR YOGESH SUTAR 3D VIEWS OF 2BHK (2).pdf', 'Yogesh Sutar — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P9</span>
+              <img src="assets/gari-projects/gari_render_pdf1_p9.jpg" alt="P9" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">2BHK 3D View — Page 9</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Yogesh Sutar — P10', '2BHK architectural render page 10.', ['Yogesh Sutar', '2BHK'], 'assets/gari-projects/gari_render_pdf1_p10.jpg', '_MR YOGESH SUTAR 3D VIEWS OF 2BHK (2).pdf', 'Yogesh Sutar — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P10</span>
+              <img src="assets/gari-projects/gari_render_pdf1_p10.jpg" alt="P10" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">2BHK 3D View — Page 10</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Yogesh Sutar — P11', '2BHK architectural render page 11.', ['Yogesh Sutar', '2BHK'], 'assets/gari-projects/gari_render_pdf1_p11.jpg', '_MR YOGESH SUTAR 3D VIEWS OF 2BHK (2).pdf', 'Yogesh Sutar — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P11</span>
+              <img src="assets/gari-projects/gari_render_pdf1_p11.jpg" alt="P11" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">2BHK 3D View — Page 11</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Yogesh Sutar — P12', '2BHK architectural render page 12.', ['Yogesh Sutar', '2BHK'], 'assets/gari-projects/gari_render_pdf1_p12.jpg', '_MR YOGESH SUTAR 3D VIEWS OF 2BHK (2).pdf', 'Yogesh Sutar — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P12</span>
+              <img src="assets/gari-projects/gari_render_pdf1_p12.jpg" alt="P12" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">2BHK 3D View — Page 12</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Yogesh Sutar — P14', '2BHK architectural render page 14.', ['Yogesh Sutar', '2BHK'], 'assets/gari-projects/gari_render_pdf1_p14.jpg', '_MR YOGESH SUTAR 3D VIEWS OF 2BHK (2).pdf', 'Yogesh Sutar — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P14</span>
+              <img src="assets/gari-projects/gari_render_pdf1_p14.jpg" alt="P14" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">2BHK 3D View — Page 14</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Yogesh Sutar — P15', '2BHK architectural render page 15.', ['Yogesh Sutar', '2BHK'], 'assets/gari-projects/gari_render_pdf1_p15.jpg', '_MR YOGESH SUTAR 3D VIEWS OF 2BHK (2).pdf', 'Yogesh Sutar — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P15</span>
+              <img src="assets/gari-projects/gari_render_pdf1_p15.jpg" alt="P15" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">2BHK 3D View — Page 15</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Yogesh Sutar — P16', '2BHK architectural render page 16.', ['Yogesh Sutar', '2BHK'], 'assets/gari-projects/gari_render_pdf1_p16.jpg', '_MR YOGESH SUTAR 3D VIEWS OF 2BHK (2).pdf', 'Yogesh Sutar — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P16</span>
+              <img src="assets/gari-projects/gari_render_pdf1_p16.jpg" alt="P16" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">2BHK 3D View — Page 16</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Yogesh Sutar — P17', '2BHK architectural render page 17.', ['Yogesh Sutar', '2BHK'], 'assets/gari-projects/gari_render_pdf1_p17.jpg', '_MR YOGESH SUTAR 3D VIEWS OF 2BHK (2).pdf', 'Yogesh Sutar — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P17</span>
+              <img src="assets/gari-projects/gari_render_pdf1_p17.jpg" alt="P17" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">2BHK 3D View — Page 17</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Yogesh Sutar — P19', '2BHK architectural render page 19.', ['Yogesh Sutar', '2BHK'], 'assets/gari-projects/gari_render_pdf1_p19.jpg', '_MR YOGESH SUTAR 3D VIEWS OF 2BHK (2).pdf', 'Yogesh Sutar — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P19</span>
+              <img src="assets/gari-projects/gari_render_pdf1_p19.jpg" alt="P19" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">2BHK 3D View — Page 19</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Yogesh Sutar — P20', '2BHK architectural render page 20.', ['Yogesh Sutar', '2BHK'], 'assets/gari-projects/gari_render_pdf1_p20.jpg', '_MR YOGESH SUTAR 3D VIEWS OF 2BHK (2).pdf', 'Yogesh Sutar — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P20</span>
+              <img src="assets/gari-projects/gari_render_pdf1_p20.jpg" alt="P20" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">2BHK 3D View — Page 20</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Yogesh Sutar — P21', '2BHK architectural render page 21.', ['Yogesh Sutar', '2BHK'], 'assets/gari-projects/gari_render_pdf1_p21.jpg', '_MR YOGESH SUTAR 3D VIEWS OF 2BHK (2).pdf', 'Yogesh Sutar — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P21</span>
+              <img src="assets/gari-projects/gari_render_pdf1_p21.jpg" alt="P21" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">2BHK 3D View — Page 21</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Yogesh Sutar — P22', '2BHK architectural render page 22.', ['Yogesh Sutar', '2BHK'], 'assets/gari-projects/gari_render_pdf1_p22.jpg', '_MR YOGESH SUTAR 3D VIEWS OF 2BHK (2).pdf', 'Yogesh Sutar — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P22</span>
+              <img src="assets/gari-projects/gari_render_pdf1_p22.jpg" alt="P22" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">2BHK 3D View — Page 22</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Yogesh Sutar — P23', '2BHK architectural render page 23.', ['Yogesh Sutar', '2BHK'], 'assets/gari-projects/gari_render_pdf1_p23.jpg', '_MR YOGESH SUTAR 3D VIEWS OF 2BHK (2).pdf', 'Yogesh Sutar — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P23</span>
+              <img src="assets/gari-projects/gari_render_pdf1_p23.jpg" alt="P23" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">2BHK 3D View — Page 23</p>
+            </div>
+          </div>
+
+          </div>
+        </div>
+
+        <!-- ── Row 2: Mr. Rajesh Gondhani (BELOW Yogesh Sutar) ── -->
+        <div class="portfolio-section-block">
+          <div class="portfolio-section-header">
+            <h3 class="portfolio-section-title">
+              Mr. Rajesh Gondhani
+              <span class="portfolio-section-badge">3D Interior Views · 10 Photos</span>
+            </h3>
+          </div>
+          <div class="tv-grid">
+            <!-- ── Mr. Rajesh Gondhani – 3D Views ── -->
+          <div class="tv-card" onclick="openTvModal('Mr. Rajesh Gondhani — P3', '3D interior view page 3.', ['Rajesh Gondhani', '3D View'], 'assets/gari-projects/gari_render_pdf2_p3.jpg', '_MR. RAJESH GONDHANI 3D VIEWS (3).pdf', 'Rajesh Gondhani — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P3</span>
+              <img src="assets/gari-projects/gari_render_pdf2_p3.jpg" alt="P3" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">3D Interior View — Page 3</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Rajesh Gondhani — P5', '3D interior view page 5.', ['Rajesh Gondhani', '3D View'], 'assets/gari-projects/gari_render_pdf2_p5.jpg', '_MR. RAJESH GONDHANI 3D VIEWS (3).pdf', 'Rajesh Gondhani — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P5</span>
+              <img src="assets/gari-projects/gari_render_pdf2_p5.jpg" alt="P5" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">3D Interior View — Page 5</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Rajesh Gondhani — P6', '3D interior view page 6.', ['Rajesh Gondhani', '3D View'], 'assets/gari-projects/gari_render_pdf2_p6.jpg', '_MR. RAJESH GONDHANI 3D VIEWS (3).pdf', 'Rajesh Gondhani — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P6</span>
+              <img src="assets/gari-projects/gari_render_pdf2_p6.jpg" alt="P6" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">3D Interior View — Page 6</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Rajesh Gondhani — P7', '3D interior view page 7.', ['Rajesh Gondhani', '3D View'], 'assets/gari-projects/gari_render_pdf2_p7.jpg', '_MR. RAJESH GONDHANI 3D VIEWS (3).pdf', 'Rajesh Gondhani — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P7</span>
+              <img src="assets/gari-projects/gari_render_pdf2_p7.jpg" alt="P7" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">3D Interior View — Page 7</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Rajesh Gondhani — P8', '3D interior view page 8.', ['Rajesh Gondhani', '3D View'], 'assets/gari-projects/gari_render_pdf2_p8.jpg', '_MR. RAJESH GONDHANI 3D VIEWS (3).pdf', 'Rajesh Gondhani — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P8</span>
+              <img src="assets/gari-projects/gari_render_pdf2_p8.jpg" alt="P8" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">3D Interior View — Page 8</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Rajesh Gondhani — P9', '3D interior view page 9.', ['Rajesh Gondhani', '3D View'], 'assets/gari-projects/gari_render_pdf2_p9.jpg', '_MR. RAJESH GONDHANI 3D VIEWS (3).pdf', 'Rajesh Gondhani — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P9</span>
+              <img src="assets/gari-projects/gari_render_pdf2_p9.jpg" alt="P9" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">3D Interior View — Page 9</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Rajesh Gondhani — P11', '3D interior view page 11.', ['Rajesh Gondhani', '3D View'], 'assets/gari-projects/gari_render_pdf2_p11.jpg', '_MR. RAJESH GONDHANI 3D VIEWS (3).pdf', 'Rajesh Gondhani — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P11</span>
+              <img src="assets/gari-projects/gari_render_pdf2_p11.jpg" alt="P11" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">3D Interior View — Page 11</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Rajesh Gondhani — P12', '3D interior view page 12.', ['Rajesh Gondhani', '3D View'], 'assets/gari-projects/gari_render_pdf2_p12.jpg', '_MR. RAJESH GONDHANI 3D VIEWS (3).pdf', 'Rajesh Gondhani — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P12</span>
+              <img src="assets/gari-projects/gari_render_pdf2_p12.jpg" alt="P12" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">3D Interior View — Page 12</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Rajesh Gondhani — P13', '3D interior view page 13.', ['Rajesh Gondhani', '3D View'], 'assets/gari-projects/gari_render_pdf2_p13.jpg', '_MR. RAJESH GONDHANI 3D VIEWS (3).pdf', 'Rajesh Gondhani — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P13</span>
+              <img src="assets/gari-projects/gari_render_pdf2_p13.jpg" alt="P13" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">3D Interior View — Page 13</p>
+            </div>
+          </div>
+          <div class="tv-card" onclick="openTvModal('Mr. Rajesh Gondhani — P14', '3D interior view page 14.', ['Rajesh Gondhani', '3D View'], 'assets/gari-projects/gari_render_pdf2_p14.jpg', '_MR. RAJESH GONDHANI 3D VIEWS (3).pdf', 'Rajesh Gondhani — View')">
+            <div class="tv-card-img-wrap">
+              <span class="tv-card-badge pdf-badge">P14</span>
+              <img src="assets/gari-projects/gari_render_pdf2_p14.jpg" alt="P14" class="tv-card-img" />
+            </div>
+            <div class="tv-card-info">
+              <p class="tv-card-desc">3D Interior View — Page 14</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Row 3: Digamber ── -->
+        <div class="portfolio-section-block">
+          <div class="portfolio-section-header">
+            <h3 class="portfolio-section-title">
+              Digamber
+              <span class="portfolio-section-badge">2BHK 3D Views · 11 Photos</span>
+            </h3>
+          </div>
+          <div class="tv-grid">
+            <div class="tv-card" onclick="openTvModal('Digamber — P1', '2BHK 3D view page 1.', ['Digamber', '2BHK'], 'assets/gari-projects/gari_render_pdf4_p001.jpg', '_MR.DIGAMBAR-3D VIEWS OF 2BHK .pdf', 'Digamber — View')">
+              <div class="tv-card-img-wrap">
+                <span class="tv-card-badge pdf-badge">P1</span>
+                <img src="assets/gari-projects/gari_render_pdf4_p001.jpg" alt="PP1" class="tv-card-img" />
+              </div>
+              <div class="tv-card-info">
+                <p class="tv-card-desc">2BHK 3D View — Page 1</p>
+              </div>
+            </div>
+            <div class="tv-card" onclick="openTvModal('Digamber — P2', '2BHK 3D view page 2.', ['Digamber', '2BHK'], 'assets/gari-projects/gari_render_pdf4_p002.jpg', '_MR.DIGAMBAR-3D VIEWS OF 2BHK .pdf', 'Digamber — View')">
+              <div class="tv-card-img-wrap">
+                <span class="tv-card-badge pdf-badge">P2</span>
+                <img src="assets/gari-projects/gari_render_pdf4_p002.jpg" alt="PP2" class="tv-card-img" />
+              </div>
+              <div class="tv-card-info">
+                <p class="tv-card-desc">2BHK 3D View — Page 2</p>
+              </div>
+            </div>
+            <div class="tv-card" onclick="openTvModal('Digamber — P3', '2BHK 3D view page 3.', ['Digamber', '2BHK'], 'assets/gari-projects/gari_render_pdf4_p003.jpg', '_MR.DIGAMBAR-3D VIEWS OF 2BHK .pdf', 'Digamber — View')">
+              <div class="tv-card-img-wrap">
+                <span class="tv-card-badge pdf-badge">P3</span>
+                <img src="assets/gari-projects/gari_render_pdf4_p003.jpg" alt="PP3" class="tv-card-img" />
+              </div>
+              <div class="tv-card-info">
+                <p class="tv-card-desc">2BHK 3D View — Page 3</p>
+              </div>
+            </div>
+            <div class="tv-card" onclick="openTvModal('Digamber — P4', '2BHK 3D view page 4.', ['Digamber', '2BHK'], 'assets/gari-projects/gari_render_pdf4_p004.jpg', '_MR.DIGAMBAR-3D VIEWS OF 2BHK .pdf', 'Digamber — View')">
+              <div class="tv-card-img-wrap">
+                <span class="tv-card-badge pdf-badge">P4</span>
+                <img src="assets/gari-projects/gari_render_pdf4_p004.jpg" alt="PP4" class="tv-card-img" />
+              </div>
+              <div class="tv-card-info">
+                <p class="tv-card-desc">2BHK 3D View — Page 4</p>
+              </div>
+            </div>
+            <div class="tv-card" onclick="openTvModal('Digamber — P5', '2BHK 3D view page 5.', ['Digamber', '2BHK'], 'assets/gari-projects/gari_render_pdf4_p005.jpg', '_MR.DIGAMBAR-3D VIEWS OF 2BHK .pdf', 'Digamber — View')">
+              <div class="tv-card-img-wrap">
+                <span class="tv-card-badge pdf-badge">P5</span>
+                <img src="assets/gari-projects/gari_render_pdf4_p005.jpg" alt="PP5" class="tv-card-img" />
+              </div>
+              <div class="tv-card-info">
+                <p class="tv-card-desc">2BHK 3D View — Page 5</p>
+              </div>
+            </div>
+            <div class="tv-card" onclick="openTvModal('Digamber — P6', '2BHK 3D view page 6.', ['Digamber', '2BHK'], 'assets/gari-projects/gari_render_pdf4_p006.jpg', '_MR.DIGAMBAR-3D VIEWS OF 2BHK .pdf', 'Digamber — View')">
+              <div class="tv-card-img-wrap">
+                <span class="tv-card-badge pdf-badge">P6</span>
+                <img src="assets/gari-projects/gari_render_pdf4_p006.jpg" alt="PP6" class="tv-card-img" />
+              </div>
+              <div class="tv-card-info">
+                <p class="tv-card-desc">2BHK 3D View — Page 6</p>
+              </div>
+            </div>
+            <div class="tv-card" onclick="openTvModal('Digamber — P7', '2BHK 3D view page 7.', ['Digamber', '2BHK'], 'assets/gari-projects/gari_render_pdf4_p007.jpg', '_MR.DIGAMBAR-3D VIEWS OF 2BHK .pdf', 'Digamber — View')">
+              <div class="tv-card-img-wrap">
+                <span class="tv-card-badge pdf-badge">P7</span>
+                <img src="assets/gari-projects/gari_render_pdf4_p007.jpg" alt="PP7" class="tv-card-img" />
+              </div>
+              <div class="tv-card-info">
+                <p class="tv-card-desc">2BHK 3D View — Page 7</p>
+              </div>
+            </div>
+            <div class="tv-card" onclick="openTvModal('Digamber — P8', '2BHK 3D view page 8.', ['Digamber', '2BHK'], 'assets/gari-projects/gari_render_pdf4_p008.jpg', '_MR.DIGAMBAR-3D VIEWS OF 2BHK .pdf', 'Digamber — View')">
+              <div class="tv-card-img-wrap">
+                <span class="tv-card-badge pdf-badge">P8</span>
+                <img src="assets/gari-projects/gari_render_pdf4_p008.jpg" alt="PP8" class="tv-card-img" />
+              </div>
+              <div class="tv-card-info">
+                <p class="tv-card-desc">2BHK 3D View — Page 8</p>
+              </div>
+            </div>
+            <div class="tv-card" onclick="openTvModal('Digamber — P9', '2BHK 3D view page 9.', ['Digamber', '2BHK'], 'assets/gari-projects/gari_render_pdf4_p009.jpg', '_MR.DIGAMBAR-3D VIEWS OF 2BHK .pdf', 'Digamber — View')">
+              <div class="tv-card-img-wrap">
+                <span class="tv-card-badge pdf-badge">P9</span>
+                <img src="assets/gari-projects/gari_render_pdf4_p009.jpg" alt="PP9" class="tv-card-img" />
+              </div>
+              <div class="tv-card-info">
+                <p class="tv-card-desc">2BHK 3D View — Page 9</p>
+              </div>
+            </div>
+            <div class="tv-card" onclick="openTvModal('Digamber — P10', '2BHK 3D view page 10.', ['Digamber', '2BHK'], 'assets/gari-projects/gari_render_pdf4_p010.jpg', '_MR.DIGAMBAR-3D VIEWS OF 2BHK .pdf', 'Digamber — View')">
+              <div class="tv-card-img-wrap">
+                <span class="tv-card-badge pdf-badge">P10</span>
+                <img src="assets/gari-projects/gari_render_pdf4_p010.jpg" alt="PP10" class="tv-card-img" />
+              </div>
+              <div class="tv-card-info">
+                <p class="tv-card-desc">2BHK 3D View — Page 10</p>
+              </div>
+            </div>
+            <div class="tv-card" onclick="openTvModal('Digamber — P11', '2BHK 3D view page 11.', ['Digamber', '2BHK'], 'assets/gari-projects/gari_render_pdf4_p011.jpg', '_MR.DIGAMBAR-3D VIEWS OF 2BHK .pdf', 'Digamber — View')">
+              <div class="tv-card-img-wrap">
+                <span class="tv-card-badge pdf-badge">P11</span>
+                <img src="assets/gari-projects/gari_render_pdf4_p011.jpg" alt="PP11" class="tv-card-img" />
+              </div>
+              <div class="tv-card-info">
+                <p class="tv-card-desc">2BHK 3D View — Page 11</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Lightbox Modal -->
+  <div class="tv-modal" id="tvModal" onclick="closeTvModal(event)">
+    <div class="tv-modal-content" onclick="event.stopPropagation()">
+      <button class="tv-modal-close" onclick="closeTvModal()">&times;</button>
+      <div class="tv-modal-body">
+        <div class="modal-media-preview" id="mMediaWrap">
+          <img id="mImg" src="" alt="Preview" />
+        </div>
+        <div>
+          <p class="tv-eyebrow" id="mBadge">Spec Sheet</p>
+          <h2 class="tv-card-name" id="mName" style="font-size: 32px; margin-bottom: 8px;">Model</h2>
+          <p class="tv-card-desc" id="mDesc" style="font-size: 15px; margin-bottom: 20px; line-height: 1.6;">Description</p>
+          <div class="tv-card-tags" id="mTags" style="margin-bottom: 24px;"></div>
+          <div class="modal-actions">
+            <a class="btn-pdf-open" id="mPdfBtn" href="#" target="_blank" style="display: none;">
+              📄 View / Open Attached PDF Presentation
+            </a>
+            <a class="cta-btn" href="#" onclick="alert('Custom CAD & Quote Request submitted for ' + document.getElementById('mName').textContent); closeTvModal(); return false;" style="text-align: center; display: inline-block;">Request Custom CAD &amp; Quote</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =============================================================== FOOTER CTA -->
+  <footer id="footer-cta">
+    <h2 class="f-headline">The hub your home has been waiting&nbsp;for.</h2>
+    <p  class="f-sub">Available in Midnight, Starlight, and Space Grey. Pre-order now and get free shipping.</p>
+    <a  class="cta-btn" href="#" id="cta-preorder">Pre-order SmartHub</a>
+  </footer>
+
+</main>
+
+<!-- ================================================================= SCRIPT -->
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- Config -------------------------------------------------- */
+  var DIR          = './ezgif-57f8c11ba24236d3-jpg/';
+  var TOTAL        = 300;
+
+  /* ---------- Helpers ------------------------------------------------- */
+  function pad3(n) { return ('00' + n).slice(-3); }
+  function src(i)  { return DIR + 'ezgif-frame-' + pad3(i + 1) + '.jpg'; }
+
+  /* ---------- Refs ---------------------------------------------------- */
+  var loader    = document.getElementById('loader');
+  var ldBar     = document.getElementById('ld-bar');
+  var ldNum     = document.getElementById('ld-num');
+  var canvas    = document.getElementById('seq-canvas');
+  var ctx       = canvas.getContext('2d');
+  var hint      = document.getElementById('scroll-hint');
+  var mainNav   = document.getElementById('main-nav');
+  var frameTag  = document.getElementById('frame-counter');
+  var fillBar   = document.getElementById('canvas-fill');
+
+  /* ---------- State --------------------------------------------------- */
+  var imgs = [];
+  var cur  = 0;
+  var natW = 0;
+  var natH = 0;
+  var dpr  = Math.min(window.devicePixelRatio || 1, 2);
+
+  /* ---------- Nav Solidify on Scroll ---------------------------------- */
+  window.addEventListener('scroll', function() {
+    if (window.scrollY > 60) {
+      mainNav.classList.add('scrolled');
+    } else {
+      mainNav.classList.remove('scrolled');
+    }
+  }, { passive: true });
+
+  /* ---------- Hero Glow Tracking -------------------------------------- */
+  var heroSection = document.getElementById('hero');
+  var heroGlow    = document.getElementById('hero-mouse-glow');
+
+  window.addEventListener('mousemove', function(e) {
+    if (heroGlow) {
+      var rect = heroSection.getBoundingClientRect();
+      var x = e.clientX - rect.left;
+      var y = e.clientY - rect.top;
+      heroGlow.style.transform = 'translate(' + (x - 300) + 'px, ' + (y - 300) + 'px)';
+    }
+  }, { passive: true });
+
+  /* ---------- Canvas Sizing ------------------------------------------- */
+  function resize() {
+    var vw = window.innerWidth;
+    var vh = window.innerHeight;
+    var dw, dh;
+    if (natW && natH) {
+      var ir = natW / natH, vr = vw / vh;
+      if (ir > vr) { dw = vw; dh = vw / ir; }
+      else         { dh = vh; dw = vh * ir; }
+    } else { dw = vw; dh = vh; }
+    canvas.style.width  = dw + 'px';
+    canvas.style.height = dh + 'px';
+    canvas.width        = Math.round(dw * dpr);
+    canvas.height       = Math.round(dh * dpr);
+    ctx.scale(dpr, dpr);
+  }
+
+  /* ---------- Draw ---------------------------------------------------- */
+  function draw(i) {
+    var img = imgs[i];
+    if (!img || !img.complete || !img.naturalWidth) return;
+    var w = canvas.width / dpr, h = canvas.height / dpr;
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    cur = i;
+
+    // Update frame counter & vertical progress bar
+    if (frameTag) {
+      var displayNum = pad3(i + 1);
+      frameTag.textContent = 'FRAME ' + displayNum + ' / ' + TOTAL;
+    }
+    if (fillBar) {
+      var pct = ((i + 1) / TOTAL) * 100;
+      fillBar.style.height = pct + '%';
+    }
+  }
+
+  /* ---------- Preload ------------------------------------------------- */
+  function preload(cb) {
+    var finished = 0;
+    var done = false;
+    function finish() {
+      if (done) return;
+      done = true;
+      cb();
+    }
+    function tick() {
+      finished++;
+      var pct = Math.min(100, Math.round(finished / TOTAL * 100));
+      if (ldBar) ldBar.style.width = pct + '%';
+      if (ldNum) ldNum.textContent = ('00' + pct).slice(-3);
+      if (finished >= TOTAL) finish();
+    }
+
+    setTimeout(finish, 2000);
+
+    for (var i = 0; i < TOTAL; i++) {
+      (function(idx) {
+        var img      = new Image();
+        img.decoding = 'async';
+        if (idx === 0) {
+          img.addEventListener('load', function () {
+            natW = img.naturalWidth;
+            natH = img.naturalHeight;
+          }, { once: true });
+        }
+        img.addEventListener('load',  tick, { once: true });
+        img.addEventListener('error', tick, { once: true });
+        img.src = src(idx);
+        if (img.complete && img.naturalWidth) tick();
+        imgs[idx] = img;
+      })(i);
+    }
+  }
+
+  /* ---------- GSAP Full Page Scroll-Scrub Sequence -------------------- */
+  function initGSAP() {
+    gsap.registerPlugin(ScrollTrigger);
+
+    var proxy = { frame: 0 };
+
+    // Scrub 3D video frames across the full document height
+    gsap.to(proxy, {
+      frame: TOTAL - 1,
+      ease: 'none',
+      scrollTrigger: {
+        trigger: document.body,
+        start: 'top top',
+        end:   'bottom bottom',
+        scrub: 0.5,
+        onUpdate: function (st) {
+          if (st.progress > 0.015) gsap.to(hint, { opacity: 0, duration: .4 });
+        }
+      },
+      onUpdate: function () {
+        var idx = Math.round(proxy.frame);
+        if (idx !== cur) draw(idx);
+      }
+    });
+
+    // Sliding Door reveal logic on scroll
+    gsap.to('#door-panel-left', {
+      xPercent: -102,
+      ease: 'none',
+      scrollTrigger: {
+        trigger: '#sliding-door-section',
+        start: 'top 55%',
+        end: 'bottom 45%',
+        scrub: 0.6
+      }
+    });
+
+    gsap.to('#door-panel-right', {
+      xPercent: 102,
+      ease: 'none',
+      scrollTrigger: {
+        trigger: '#sliding-door-section',
+        start: 'top 55%',
+        end: 'bottom 45%',
+        scrub: 0.6
+      }
+    });
+  }
+
+  /* ---------- Hero entrance ------------------------------------------- */
+  function heroIn() {
+    var tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+    tl.to('#h-eyebrow',  { opacity: 1, y: 0, duration: .9 })
+      .to('.h-word',     { opacity: 1, y: 0, duration: 0.9, stagger: 0.12 }, '-=.6')
+      .to('#h-tagline',  { opacity: 1, y: 0, duration: .85 }, '-=.5')
+      .to('#h-sub',      { opacity: 1, y: 0, duration: .9  }, '-=.5')
+      .to(hint,          { opacity: 1, duration: .8         }, '-=.3');
+  }
+
+  /* ---------- Footer reveal ------------------------------------------- */
+  function initCallouts() {
+    gsap.from('#footer-cta .f-headline, #footer-cta .f-sub, #footer-cta .cta-btn', {
+      opacity: 0, y: 40, stagger: .15, duration: 1, ease: 'power3.out',
+      scrollTrigger: { trigger: '#footer-cta', start: 'top 75%', toggleActions: 'play none none reverse' }
+    });
+  }
+
+  /* ---------- Boot ---------------------------------------------------- */
+  preload(function () {
+    resize();
+    draw(0);
+    loader.classList.add('hidden');
+    initGSAP();
+    initCallouts();
+    heroIn();
+    window.addEventListener('resize', function () {
+      resize(); draw(cur); ScrollTrigger.refresh();
+    }, { passive: true });
+    setTimeout(function () { ScrollTrigger.refresh(); }, 200);
+  });
+
+  /* ---------- TV Modal Lightbox --------------------------------------- */
+  window.openTvModal = function (name, desc, tags, imgSrc, pdfUrl, badgeText) {
+    document.getElementById('mName').innerHTML = name;
+    document.getElementById('mDesc').textContent = desc;
+    document.getElementById('mBadge').textContent = badgeText || 'Spec Sheet';
+
+    var imgEl = document.getElementById('mImg');
+    var mediaWrap = document.getElementById('mMediaWrap');
+    if (imgSrc) {
+      imgEl.src = imgSrc;
+      mediaWrap.style.display = 'flex';
+    } else {
+      mediaWrap.style.display = 'none';
+    }
+
+    var pdfBtn = document.getElementById('mPdfBtn');
+    if (pdfUrl) {
+      pdfBtn.href = encodeURI(pdfUrl);
+      pdfBtn.style.display = 'inline-flex';
+    } else {
+      pdfBtn.style.display = 'none';
+    }
+
+    var tagsContainer = document.getElementById('mTags');
+    tagsContainer.innerHTML = '';
+    if (Array.isArray(tags)) {
+      tags.forEach(function(t) {
+        var span = document.createElement('span');
+        span.className = 'tv-tag';
+        span.textContent = t;
+        tagsContainer.appendChild(span);
+      });
+    }
+    document.getElementById('tvModal').classList.add('active');
+  };
+
+  window.closeTvModal = function (e) {
+    if (e && e.target && e.target.id !== 'tvModal' && !e.target.classList.contains('tv-modal-close')) return;
+    document.getElementById('tvModal').classList.remove('active');
+  };
+
+})();
+</script>
+</body>
+</html>
