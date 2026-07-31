@@ -252,28 +252,6 @@
       50%      { transform: rotate(45deg) translateY(6px); }
     }
 
-    /* Frame Counter & Progress Bar Overlay */
-    .canvas-progress-wrap {
-      position: fixed; right: 32px; top: 50%; transform: translateY(-50%);
-      display: flex; flex-direction: column; align-items: center; gap: 12px;
-      z-index: 8000; pointer-events: none;
-    }
-    .canvas-progress-bar {
-      width: 2px; height: 160px;
-      background: rgba(255,255,255,0.12);
-      border-radius: 99px; overflow: hidden; position: relative;
-    }
-    .canvas-progress-fill {
-      width: 100%; height: 0%;
-      background: var(--brass);
-      box-shadow: 0 0 12px var(--brass-glow);
-    }
-    .canvas-frame-tag {
-      writing-mode: vertical-rl;
-      font-size: 10px; font-weight: 600; letter-spacing: 2px;
-      color: var(--brass); text-transform: uppercase;
-    }
-
     /* ===== SLIDING DOOR WORK SHOWCASE SECTION ===== */
     #sliding-door-section {
       position: relative;
@@ -582,7 +560,6 @@
     @media (max-width: 768px) {
       #hero { padding-top: 64px; padding-bottom: 48px; }
       #main-nav { padding-top: 16px; padding-bottom: 16px; padding-left: 16px; padding-right: 16px; }
-      .canvas-progress-wrap { display: none; }
       .door-frame-wrapper { min-height: 520px; }
       #sliding-door-section { min-height: 520px; }
       #footer-cta { min-height: 50vh; padding-top: 64px; padding-bottom: 64px; }
@@ -621,14 +598,6 @@
 <div id="bg-canvas-container">
   <canvas id="seq-canvas" role="img" aria-label="SmartHub rotating 3D view"></canvas>
   <div class="canvas-vignette"></div>
-</div>
-
-<!-- Frame Progress Indicator HUD Overlay -->
-<div class="canvas-progress-wrap">
-  <span class="canvas-frame-tag" id="frame-counter">FRAME 001 / 300</span>
-  <div class="canvas-progress-bar">
-    <div class="canvas-progress-fill" id="canvas-fill"></div>
-  </div>
 </div>
 
 <!-- ================================================================ LOADER -->
@@ -1137,8 +1106,6 @@
   var ctx       = canvas.getContext('2d');
   var hint      = document.getElementById('scroll-hint');
   var mainNav   = document.getElementById('main-nav');
-  var frameTag  = document.getElementById('frame-counter');
-  var fillBar   = document.getElementById('canvas-fill');
 
   /* ---------- State --------------------------------------------------- */
   var imgs = [];
@@ -1194,16 +1161,6 @@
     ctx.clearRect(0, 0, w, h);
     ctx.drawImage(img, 0, 0, w, h);
     cur = i;
-
-    // Update frame counter & vertical progress bar
-    if (frameTag) {
-      var displayNum = pad3(i + 1);
-      frameTag.textContent = 'FRAME ' + displayNum + ' / ' + TOTAL;
-    }
-    if (fillBar) {
-      var pct = ((i + 1) / TOTAL) * 100;
-      fillBar.style.height = pct + '%';
-    }
   }
 
   /* ---------- Preload ------------------------------------------------- */
