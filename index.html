@@ -522,26 +522,6 @@
       box-shadow: 0 0 30px rgba(201, 169, 110, 0.6);
     }
 
-    /* ---- Footer CTA --------------------------------------------------- */
-    #footer-cta {
-      min-height: 80vh;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      text-align: center; gap: 32px; padding: 60px 24px;
-      background: rgba(6, 6, 8, 0.85);
-      backdrop-filter: blur(20px);
-    }
-    .f-headline {
-      font-size: clamp(36px,7vw,76px); font-weight: 700;
-      letter-spacing: -2px; line-height: 1.08;
-      background: linear-gradient(150deg,#fff 0%,#a1a1a6);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text; max-width: 800px;
-    }
-    .f-sub {
-      font-size: clamp(15px,2vw,20px); color: var(--muted);
-      max-width: 480px; line-height: 1.6;
-    }
     .cta-btn {
       display: inline-block; padding: 15px 40px;
       font-size: 16px; font-weight: 500; font-family: var(--font);
@@ -562,7 +542,6 @@
       #main-nav { padding-top: 16px; padding-bottom: 16px; padding-left: 16px; padding-right: 16px; }
       .door-frame-wrapper { min-height: 520px; }
       #sliding-door-section { min-height: 520px; }
-      #footer-cta { min-height: 50vh; padding-top: 64px; padding-bottom: 64px; }
       .hero-mouse-glow { width: 360px; height: 360px; }
       .scroll-hint { bottom: 24px; opacity: 0.5; }
       .tv-card { width: calc(50vw - 32px); min-width: 160px; }
@@ -573,7 +552,6 @@
       #main-nav { padding-top: 12px; padding-bottom: 12px; padding-left: 12px; padding-right: 12px; font-size: 13px; }
       .door-frame-wrapper { min-height: 380px; }
       #sliding-door-section { min-height: 380px; }
-      #footer-cta { min-height: 40vh; padding-top: 48px; padding-bottom: 48px; }
       .hero-mouse-glow { width: 280px; height: 280px; }
       .tv-card { width: calc(50vw - 24px); min-width: 140px; }
       h1#hero-headline { font-size: 2.4rem !important; }
@@ -781,9 +759,7 @@
   <ul class="nav-links">
     <li><a href="#hero" class="nav-link">Overview</a></li>
     <li><a href="#sliding-door-section" class="nav-link">Portfolio</a></li>
-    <li><a href="#footer-cta" class="nav-link">Pre-Order</a></li>
   </ul>
-  <a href="#footer-cta" class="nav-cta">Pre-Order</a>
 </nav>
 
 <!-- ===== FULLSCREEN FIXED 3D CANVAS BACKGROUND ===== -->
@@ -855,7 +831,7 @@
           <p>&ldquo;Technology should quietly improve life, allowing people to focus on what truly matters.&rdquo;</p>
           <cite>&mdash; Devendra Tiwari</cite>
         </blockquote>
-        <a class="founder-cta" href="#footer-cta">Discover Our Vision</a>
+        <a class="founder-cta" href="#hero">Discover Our Vision</a>
       </div>
     </div>
   </section>
@@ -1301,13 +1277,6 @@
     </div>
   </div>
 
-  <!-- =============================================================== FOOTER CTA -->
-  <footer id="footer-cta">
-    <h2 class="f-headline">The hub your home has been waiting&nbsp;for.</h2>
-    <p  class="f-sub">Available in Midnight, Starlight, and Space Grey. Pre-order now and get free shipping.</p>
-    <a  class="cta-btn" href="#" id="cta-preorder">Pre-order SmartHub</a>
-  </footer>
-
 </main>
 
 <!-- ================================================================= SCRIPT -->
@@ -1486,14 +1455,6 @@
       .to(hint,          { opacity: 1, duration: .8         }, '-=.3');
   }
 
-  /* ---------- Footer reveal ------------------------------------------- */
-  function initCallouts() {
-    gsap.from('#footer-cta .f-headline, #footer-cta .f-sub, #footer-cta .cta-btn', {
-      opacity: 0, y: 40, stagger: .15, duration: 1, ease: 'power3.out',
-      scrollTrigger: { trigger: '#footer-cta', start: 'top 75%', toggleActions: 'play none none reverse' }
-    });
-  }
-
   /* ---------- Founder reveal ------------------------------------------ */
   function initFounder() {
     var tl = gsap.timeline({
@@ -1518,7 +1479,6 @@
     draw(0);
     loader.classList.add('hidden');
     initGSAP();
-    initCallouts();
     initFounder();
     heroIn();
     window.addEventListener('resize', function () {
